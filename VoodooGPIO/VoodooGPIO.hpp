@@ -203,8 +203,6 @@ class VoodooGPIO : public IOService {
     UInt32 readl(IOVirtualAddress addr);
     void writel(UInt32 b, IOVirtualAddress addr);
 
-    IOWorkLoop* getWorkLoop();
-
     struct intel_community *intel_get_community(unsigned pin);
     const struct intel_padgroup *intel_community_get_padgroup(const struct intel_community *community, unsigned pin);
     IOVirtualAddress intel_get_padcfg(unsigned pin, unsigned reg);
@@ -250,6 +248,8 @@ class VoodooGPIO : public IOService {
     void stop(IOService *provider) override;
 
     IOReturn setPowerState(unsigned long powerState, IOService *whatDevice) override;
+
+    IOWorkLoop* getWorkLoop() const override;
 };
 
 #endif /* VoodooGPIO_h */

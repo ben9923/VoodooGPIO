@@ -8,6 +8,7 @@
 
 #include "VoodooGPIO.hpp"
 
+#define super IOService
 OSDefineMetaClassAndStructors(VoodooGPIO, IOService);
 
 #define kIOPMPowerOff 0
@@ -85,23 +86,7 @@ void VoodooGPIO::writel(UInt32 b, IOVirtualAddress addr) {
     *(volatile UInt32 *)(addr) = b;
 }
 
-IOWorkLoop* VoodooGPIO::getWorkLoop() {
-    // Do we have a work loop already?, if so return it NOW.
-    if ((vm_address_t) workLoop >> 1)
-        return workLoop;
-
-    if (OSCompareAndSwap(0, 1, reinterpret_cast<IOWorkLoop*>(&workLoop))) {
-        // Construct the workloop and set the cntrlSync variable
-        // to whatever the result is and return
-        workLoop = IOWorkLoop::workLoop();
-    } else {
-        while (reinterpret_cast<IOWorkLoop*>(workLoop) == reinterpret_cast<IOWorkLoop*>(1)) {
-            // Spin around the cntrlSync variable until the
-            // initialization finishes.
-            thread_block(0);
-        }
-    }
-
+IOWorkLoop* VoodooGPIO::getWorkLoop() const {
     return workLoop;
 }
 
@@ -560,20 +545,20 @@ bool VoodooGPIO::start(IOService *provider) {
         IOLog("%s::Missing Platform Data! Aborting!\n", getName());
         return false;
     }
-    
-    if (!IOService::start(provider))
+
+    if (!super::start(provider))
         return false;
     
     PMinit();
-    
-    workLoop = getWorkLoop();
+
+    // Initialize a dedicated workloop
+    workLoop = IOWorkLoop::workLoop();
     if (!workLoop) {
-        IOLog("%s::Failed to get workloop!\n", getName());
+        IOLog("%s::Failed to initialize workloop!\n", getName());
         stop(provider);
         return false;
     }
-    workLoop->retain();
-    
+
     interruptSource = IOInterruptEventSource::interruptEventSource(this, OSMemberFunctionCast(IOInterruptEventAction, this, &VoodooGPIO::InterruptOccurred), provider);
     if (!interruptSource) {
         IOLog("%s::Failed to get GPIO Controller interrupt!\n", getName());
@@ -715,14 +700,11 @@ void VoodooGPIO::stop(IOService *provider) {
         OSSafeReleaseNULL(command_gate);
     }
     
-    if (workLoop) {
-        workLoop->release();
-        workLoop = NULL;
-    }
-    
+    OSSafeReleaseNULL(workLoop);
+
     PMstop();
     
-    IOService::stop(provider);
+    super::stop(provider);
 }
 
 IOReturn VoodooGPIO::setPowerState(unsigned long powerState, IOService *whatDevice) {
